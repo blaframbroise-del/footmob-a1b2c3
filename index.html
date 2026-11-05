@@ -27,7 +27,7 @@ td.l,th.l{text-align:left}tr.avg td{font-weight:700;background:var(--soft)}
 #fiche{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px;display:flex;gap:8px;align-items:center}
 .hide{display:none}
 </style></head><body>
-<header><h1>FootMob — <span id="d"></span></h1><small id="g"></small><div class="chips"><a class="chip" href="index.html">Jour J</a><a class="chip" href="demain.html">Demain</a></div></header>
+<header><h1>FootMob — <span id="d"></span></h1><small id="g"></small><div class="chips"><a class="chip" href="index.html">Jour J</a><a class="chip" href="demain.html">Demain</a><a class="chip" href="buts.html">Buts</a><a class="chip" href="nba.html">NBA</a></div></header>
 <nav><button id="t1" class="on">Marchés</button><button id="t2">Matchs et stats</button><button id="t4">Victoire</button><button id="t3">Ma fiche</button></nav>
 
 <section id="v1">
@@ -122,15 +122,17 @@ function windowAvg(hist,n,idx,venueName){
  let fo=0,fn=0,ao=0,an=0;rows.forEach(h=>{const v=h.v[idx];if(v[0]!=null){fo+=v[0];fn++}if(v[1]!=null){ao+=v[1];an++}});
  return {n:rows.length,f:fn?fo/fn:null,a:an?ao/an:null};
 }
-function summary(m,venueOnly){
- const names=D.stat_names,W=[5,10,15];
- const cell=r=>r.f==null||r.a==null?"-":r.f.toFixed(1)+" / "+r.a.toFixed(1)+(r.n<0?"":"");
- let h='<div class="tw"><table><tr><th class="l" rowspan="2">Stat (P / C)</th><th colspan="3">'+esc(m.home)+(venueOnly?" (domicile)":"")+'</th><th colspan="3">'+esc(m.away)+(venueOnly?" (extérieur)":"")+'</th></tr><tr>'+W.map(w=>'<th>'+w+' der.</th>').join("")+W.map(w=>'<th>'+w+' der.</th>').join("")+'</tr>';
- names.forEach((n,i)=>{h+='<tr><td class="l">'+esc(n)+'</td>'
-  +W.map(w=>'<td>'+cell(windowAvg(m.stats.home.history,w,i,venueOnly?"Domicile":null))+'</td>').join("")
-  +W.map(w=>'<td>'+cell(windowAvg(m.stats.away.history,w,i,venueOnly?"Extérieur":null))+'</td>').join("")+'</tr>'});
- const nh=W.map(w=>windowAvg(m.stats.home.history,w,0,venueOnly?"Domicile":null).n),na=W.map(w=>windowAvg(m.stats.away.history,w,0,venueOnly?"Extérieur":null).n);
- return h+'</table></div><p class="mut">Matchs réellement disponibles — '+esc(m.home)+' : '+nh.join(" / ")+' · '+esc(m.away)+' : '+na.join(" / ")+'</p>';
+const FAMS=[["Tirs",["Tirs","Tirs 1re MT","Tirs 2e MT"]],["Tirs cadrés",["Tirs cadrés","Cadrés 1re MT","Cadrés 2e MT"]],["Corners",["Corners","Corners 1re MT","Corners 2e MT"]],["Cartons",["Cartons jaunes","Cartons rouges"]],["Buts",["Buts"]]];
+function mk(box,labels,isOn,onClick){box.innerHTML="";labels.forEach(v=>{const b=document.createElement("button");b.className="chip"+(isOn(v)?" on":"");b.textContent=v;b.onclick=()=>onClick(v);box.appendChild(b)})}
+function summary(m,st){
+ const names=D.stat_names;const fam=FAMS.find(f=>f[0]===st.fam)||FAMS[0];
+ const hv=st.venue?"Domicile":null,av=st.venue?"Extérieur":null;const f=x=>x==null?"-":x.toFixed(1);
+ let h='<div class="tw"><table><tr><th class="l">Période</th><th>'+esc(m.home)+'<br>marque</th><th>'+esc(m.home)+'<br>concède</th><th>'+esc(m.away)+'<br>marque</th><th>'+esc(m.away)+'<br>concède</th><th>Total match<br>attendu</th></tr>';
+ fam[1].forEach(n=>{const i=names.indexOf(n);if(i<0)return;const a=windowAvg(m.stats.home.history,st.win,i,hv),b=windowAvg(m.stats.away.history,st.win,i,av);
+  const tot=(a.f!=null&&b.a!=null&&b.f!=null&&a.a!=null)?((a.f+b.a)/2+(b.f+a.a)/2):null;
+  h+='<tr><td class="l">'+esc(n)+'</td><td>'+f(a.f)+'</td><td>'+f(a.a)+'</td><td>'+f(b.f)+'</td><td>'+f(b.a)+'</td><td><b>'+f(tot)+'</b></td></tr>'});
+ const nh=windowAvg(m.stats.home.history,st.win,0,hv).n,na=windowAvg(m.stats.away.history,st.win,0,av).n;
+ return h+"</table></div><p class=\"mut\">Moyennes par match sur les "+st.win+" derniers matchs"+(st.venue?" ("+esc(m.home)+" à domicile, "+esc(m.away)+" à l extérieur)":"")+" — matchs disponibles : "+esc(m.home)+" "+nh+", "+esc(m.away)+" "+na+". Total attendu = (ce que "+esc(m.home)+" marque + ce que "+esc(m.away)+" concède) / 2 + (ce que "+esc(m.away)+" marque + ce que "+esc(m.home)+" concède) / 2.</p>";
 }
 function renderMatches(){
  const q=$("#mq").value.toLowerCase(),c=$("#mc").value;const box=$("#matches");box.innerHTML="";
@@ -140,8 +142,8 @@ function renderMatches(){
   el.innerHTML='<b>'+esc(m.home)+' — '+esc(m.away)+'</b><br><span class="mut">'+esc(m.time)+' · '+esc(m.competition)+' · Trap Score '+m.trap+'</span>'
    +'<p><b>Meilleurs choix</b><br>'+top+'</p>'
    +(m.narrative.length?'<details><summary>Enjeu et lecture du match</summary>'+m.enjeu.map(e=>'<p>'+esc(e)+'</p>').join("")+m.narrative.map(n=>'<p><b>'+esc(n[0])+'</b> — '+esc(n[1])+'</p>').join("")+'</details>':'')
-   +'<details open><summary>Statistiques par marché : 5, 10 et 15 derniers matchs</summary>'
-   +'<div class="bar"><select class="wSel"><option value="0">Tous les lieux</option><option value="1">Lieu du prochain match seulement (domicile / extérieur)</option></select></div>'
+   +'<details open><summary>Statistiques par marché</summary>'
+   +'<div class="chips fam"></div><div class="chips win"></div>'
    +'<div class="sum"></div></details>'
    +'<details class="hist"><summary>Historique match par match (filtrable)</summary>'
    +'<div class="bar"><select class="sSel">'+D.stat_names.map((n,i)=>'<option value="'+i+'">'+esc(n)+'</option>').join("")+'</select>'
@@ -149,9 +151,11 @@ function renderMatches(){
    +'<div class="out"></div></details>'
    +(m.blacklist.length?'<p class="mut">Marchés blacklistés : '+esc(m.blacklist.join(", "))+'</p>':'');
   const out=el.querySelector(".out"),sSel=el.querySelector(".sSel"),vSel=el.querySelector(".vSel");
-  const sumBox=el.querySelector(".sum"),wSel=el.querySelector(".wSel");
-  const upd=()=>{out.innerHTML=statTable(m,parseInt(sSel.value),vSel.value==="1");sumBox.innerHTML=summary(m,wSel.value==="1")};
-  wSel.onchange=upd;
+  const sumBox=el.querySelector(".sum");const st={fam:"Tirs",win:10,venue:false};
+  const draw=()=>{sumBox.innerHTML=summary(m,st);
+   mk(el.querySelector(".fam"),FAMS.map(x=>x[0]),v=>v===st.fam,v=>{st.fam=v;draw()});
+   mk(el.querySelector(".win"),["5 matchs","10 matchs","15 matchs","Lieu du match"],v=>v==="Lieu du match"?st.venue:v===st.win+" matchs",v=>{if(v==="Lieu du match")st.venue=!st.venue;else st.win=parseInt(v);draw()})};
+  const upd=()=>{out.innerHTML=statTable(m,parseInt(sSel.value),vSel.value==="1");draw()};
   sSel.onchange=upd;vSel.onchange=upd;upd();
   box.appendChild(el)});
 }
